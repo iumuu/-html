@@ -14,16 +14,23 @@ jobs:
       uses: actions/checkout@v4
 
     - name: SFTP Deploy
-      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+      uses: sebastianpopp/ftp-action@v2.0.0
       with:
-        username: ${{ secrets.SFTP_USER }}
-        server: ${{ secrets.SFTP_HOST }}
+        # 强制指定使用 SFTP 协议
+        protocol: sftp
+        
+        host: ${{ secrets.SFTP_HOST }}
         port: ${{ secrets.SFTP_PORT }}
-        ssh_private_key: ${{ secrets.SFTP_PRIVATE_KEY }}
+        user: ${{ secrets.SFTP_USER }}
         
-        # 核心：这里会自动读取你设置的 "abc-com"
-        # 插件在连接后，会直接将 local_path 里的内容传进这个文件夹内部
-        remote_path: ${{ secrets.SFTP_DIR }}
+        # 传入你的私钥
+        privateKey: ${{ secrets.SFTP_PRIVATE_KEY }}
         
-        # 你的 HTML 文件所在的本地目录（"./" 代表仓库根目录下的 index.html 等直接传过去）
-        local_path: "./"
+        # 本地要上传的文件夹（仓库根目录）
+        localDir: "."
+        
+        # 远程主机的目标目录（对应你的 abc-com）
+        remoteDir: "${{ secrets.SFTP_DIR }}"
+        
+        # 关键配置：有些服务器严格限制权限，需要关闭临时文件扩展名传输
+        forcePasv: true
