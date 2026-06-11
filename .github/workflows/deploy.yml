@@ -1,59 +1,29 @@
-name: Deploy to TierHive
+name: Deploy Website via SFTP
 
 on:
   push:
     branches:
-      - main
+      - main  # 如果你的主分支叫 master，请改为 master
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
 
-      - name: Install lftp
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y lftp
-
-      - name: Setup SSH Key
-        env:
-          # 请确保这里的 Secret 已经换成了在本地运行 base64 编码后的单行字符串
-          BASE64_PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
-        run: |
-          mkdir -p ~/.ssh
-          chmod 700 ~/.ssh
-          
-          # 解密出结构绝对完美的私钥
-          echo "$BASE64_PRIVATE_KEY" | base64 --decode > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          
-          # 扫描指纹
-          ssh-keyscan -p ${{ secrets.SFTP_PORT }} ${{ secrets.SFTP_HOST }} >> ~/.ssh/known_hosts
-          chmod 644 ~/.ssh/known_hosts
-
-      - name: Pure SFTP Upload
-        run: |
-          # 配置系统级 SSH 客户端规则（lftp 会自动调用这些规则）
-          cat << 'EOF' >> ~/.ssh/config
-          Host ${{ secrets.SFTP_HOST }}
-            HostName ${{ secrets.SFTP_HOST }}
-            Port ${{ secrets.SFTP_PORT }}
-            User ${{ secrets.SFTP_USER }}
-            IdentityFile ~/.ssh/id_ed25519
-            StrictHostKeyChecking no
-            UserKnownHostsFile /dev/null
-          EOF
-          chmod 600 ~/.ssh/config
-
-          # 纯执行 lftp，并开启 debug 3 模式
-          # 如果密钥还报错，lftp 会在日志里清晰打印出底层 sftp 握手失败的具体原因
-          lftp -e "
-          debug 3;
-          set net:max-retries 2;
-          set sftp:auto-confirm yes;
-          mirror -R --delete --verbose ./ /${{ secrets.SFTP_DIR }}/;
-          bye
-          " sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
+    - name: SFTP Deploy
+      uses: wlixcc/SFTP-Deploy-Action@v1.2.4
+      with:
+        username: ${{ secrets.SFTP_USER }}
+        server: ${{ secrets.SFTP_HOST }}
+        port: ${{ secrets.SFTP_PORT }}
+        ssh_private_key: ${{ secrets.SFTP_PRIVATE_KEY }}
+        
+        # 核心：这里会自动读取你设置的 "abc-com"
+        # 插件在连接后，会直接将 local_path 里的内容传进这个文件夹内部
+        remote_path: ${{ secrets.SFTP_DIR }}
+        
+        # 你的 HTML 文件所在的本地目录（"./" 代表仓库根目录下的 index.html 等直接传过去）
+        local_path: "./"
