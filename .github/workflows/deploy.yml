@@ -36,11 +36,9 @@ jobs:
           ssh-keyscan -p ${{ secrets.SFTP_PORT }} ${{ secrets.SFTP_HOST }} >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Upload Files
+      - name: Diagnostic and Upload Files
         run: |
-          set -x
-          
-          # 4. 配置 SSH 客户端规则（解决 lftp 传递 -o 参数可能失败的问题）
+          # 4. 配置系统级 SSH 客户端规则
           cat << 'EOF' >> ~/.ssh/config
           Host ${{ secrets.SFTP_HOST }}
             HostName ${{ secrets.SFTP_HOST }}
@@ -52,10 +50,28 @@ jobs:
           EOF
           chmod 600 ~/.ssh/config
 
-          # 5. 执行干净的 lftp 同步命令
-          lftp -e "
-          set net:max-retries 2;
-          set sftp:auto-confirm yes;
-          mirror -R --delete --verbose ./ /${{ secrets.SFTP_DIR }}/;
-          bye
-          " sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
+          # 5. 【诊断层】利用原生 SSH 进行高保真连接测试
+          echo "=========================================================="
+          echo "正在对底层 SSH 连接进行深度诊断，请密切关注下方日志..."
+          echo "=========================================================="
+          
+          # 使用 -o ConnectTimeout=10 防止网络不通时无限卡死
+          if ssh -o ConnectTimeout=10 ${{ secrets.SFTP_HOST }} "echo '=== 底层 SSH 握手成功，网络与密钥均正常！ ==='" ; then
+              echo "----------------------------------------------------------"
+              echo "底层连接验证通过，开始执行 lftp 传输..."
+              echo "----------------------------------------------------------"
+              
+              # 6. 【传输层】底层验证通过后，正式执行 lftp 同步
+              lftp -e "
+              set net:max-retries 2;
+              set sftp:auto-confirm yes;
+              mirror -R --delete --verbose ./ /${{ secrets.SFTP_DIR }}/;
+              bye
+              " sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
+          else
+              echo "=========================================================="
+              echo "❌ 诊断失败：底层的 SSH 握手未能通过！"
+              echo "为了帮你找出原因，下面将打印极度详细的连接日志（-vvv）："
+              echo "=========================================================="
+              ssh -vvv -o ConnectTimeout=10 ${{ secrets.SFTP_HOST }} "pwd"
+          fi
