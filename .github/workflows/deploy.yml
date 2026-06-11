@@ -35,7 +35,7 @@ jobs:
           lftp -e "
           set sftp:connect-program 'ssh -a -x -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null';
           set sftp:auto-confirm yes;
-          set sftp:max-retries 2;
+          set net:max-retries 2;
           mirror -R --delete --verbose ./ /${{ secrets.SFTP_DIR }}/;
           bye
           " sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
