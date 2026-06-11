@@ -10,19 +10,32 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
-      - name: Setup Key
+      - name: Setup SSH Key
+        env:
+          # 将私钥先注入为环境变量，这样可以完美保留换行符，且不会在 log 中意外泄露
+          PRIVATE_KEY: ${{ secrets.SFTP_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.ssh
-          echo "${{ secrets.SFTP_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          cat << 'EOF' > ~/.ssh/id_ed25519
+          $PRIVATE_KEY
+          EOF
+          
           chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p ${{ secrets.SFTP_PORT }} ${{ secrets.SFTP_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Test SFTP
+      - name: Upload Files
         run: |
-          lftp -d \
-          -e "set sftp:auto-confirm yes; ls; bye" \
-          sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
+          set -x
+          lftp -e "
+          set sftp:connect-program 'ssh -a -x -i ~/.ssh/id_ed25519 -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null';
+          set sftp:auto-confirm yes;
+          set sftp:max-retries 2;
+          mirror -R --delete --verbose ./ /${{ secrets.SFTP_DIR }}/;
+          bye
+          " sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
