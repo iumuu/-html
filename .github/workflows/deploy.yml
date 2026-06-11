@@ -16,9 +16,18 @@ jobs:
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
+      - name: Setup SSH Key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SFTP_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+
+          ssh-keyscan -p ${{ secrets.SFTP_PORT }} ${{ secrets.SFTP_HOST }} >> ~/.ssh/known_hosts
+
       - name: Upload Files
         run: |
-          lftp -u "${{ secrets.SFTP_USER }},${{ secrets.SFTP_PASS }}" sftp://${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }} <<EOF
-          mirror -R --delete ./ /${{ secrets.SFTP_DIR }}/
+          lftp -e "
+          set sftp:connect-program 'ssh -a -x -i ~/.ssh/id_ed25519';
+          mirror -R --delete ./ /${{ secrets.SFTP_DIR }}/;
           bye
-          EOF
+          " sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
