@@ -10,24 +10,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Install lftp
         run: sudo apt-get update && sudo apt-get install -y lftp
 
-      - name: Setup SSH Key
+      - name: Setup Key
         run: |
           mkdir -p ~/.ssh
           echo "${{ secrets.SFTP_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
 
-          ssh-keyscan -p ${{ secrets.SFTP_PORT }} ${{ secrets.SFTP_HOST }} >> ~/.ssh/known_hosts
-
-      - name: Upload Files
+      - name: Test SFTP
         run: |
-          lftp -e "
-          set sftp:connect-program 'ssh -a -x -i ~/.ssh/id_ed25519';
-          mirror -R --delete ./ /${{ secrets.SFTP_DIR }}/;
-          bye
-          " sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
+          lftp -d \
+          -e "set sftp:auto-confirm yes; ls; bye" \
+          sftp://${{ secrets.SFTP_USER }}@${{ secrets.SFTP_HOST }}:${{ secrets.SFTP_PORT }}
